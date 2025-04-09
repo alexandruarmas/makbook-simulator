@@ -44,27 +44,6 @@ import SoftwareUpdateSettings from "@/components/settings/SoftwareUpdateSettings
 import SiriSettings from "@/components/settings/SiriSettings";
 import AccessibilitySettings from "@/components/settings/AccessibilitySettings";
 
-// Define weather data interface
-interface WeatherData {
-  location: string;
-  temperature: number;
-  condition: string;
-  icon: string;
-  high: number;
-  low: number;
-  hourlyForecast: Array<{
-    time: string;
-    icon: string;
-    temp: number;
-  }>;
-  dailyForecast: Array<{
-    day: string;
-    icon: string;
-    high: number;
-    low: number;
-  }>;
-}
-
 interface MacOSDesktopProps {
   brightness: number;
   isPoweredOn: boolean;
@@ -84,7 +63,6 @@ interface WindowPositions {
   about: WindowPosition;
   "finder-preferences": WindowPosition;
   trash: WindowPosition;
-  weather: WindowPosition;
   music: WindowPosition;
   [key: string]: WindowPosition; // Add index signature to allow string indexing
 }
@@ -104,7 +82,6 @@ export default function MacOSDesktop({
     "finder-prefs": { x: 347, y: 110, width: 634, height: 410 },
     "finder": { x: 347, y: 110, width: 634, height: 410 },
     "trash": { x: 347, y: 110, width: 634, height: 410 },
-    "weather": { x: 250, y: 100, width: 700, height: 500 },
     "photos": { x: 347, y: 110, width: 800, height: 600 },
     "mail": { x: 347, y: 110, width: 634, height: 410 },
     "messages": { x: 347, y: 110, width: 634, height: 410 },
@@ -130,9 +107,6 @@ export default function MacOSDesktop({
 
   const [isTrashEmpty, setIsTrashEmpty] = useState(true);
   const [openWindows, setOpenWindows] = useState<Record<string, number>>({});
-  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [weatherError, setWeatherError] = useState<string | null>(null);
   const [worldClocks, setWorldClocks] = useState([
     { city: 'New York', timezone: 'America/New_York' },
     { city: 'London', timezone: 'Europe/London' },
@@ -161,8 +135,7 @@ export default function MacOSDesktop({
     Calendar: true,
     Mail: true,
     Messages: true,
-    Netscape: true,
-    Weather: true
+    Netscape: true
   });
   const [displayResolution, setDisplayResolution] = useState("default");
   
@@ -501,181 +474,6 @@ export default function MacOSDesktop({
     hideContextMenu();
   };
 
-  // Handle trash click
-  const handleTrashClick = () => {
-    // Make sure dock is visible when opening trash
-    setIsDockVisible(true);
-    openWindow("trash");
-  };
-
-  // Add weather widget click handler
-  const handleWeatherWidgetClick = () => {
-    openWindow("weather");
-  };
-  
-  // Add calendar widget click handler
-  // const handleCalendarWidgetClick = () => {
-  //   openWindow("calendar");
-  // };
-  
-  // Add clock widget click handler
-  // const handleClockWidgetClick = () => {
-  //   openWindow("clock");
-  // };
-
-  // Fetch weather data based on geolocation
-  useEffect(() => {
-    const fetchWeatherData = async (lat: number, lon: number) => {
-      try {
-        setIsLoading(true);
-        // Using OpenWeatherMap API with a free API key - in a real app you'd want to hide this in an environment variable
-        const apiKey = "bd5e378503939ddaee76f12ad7a97608";
-        const response = await fetch(
-          `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`
-        );
-        
-        if (!response.ok) {
-          throw new Error("Weather data not available");
-        }
-        
-        const data = await response.json();
-        
-        // Fetch 5-day forecast for hourly and daily data
-        const forecastResponse = await fetch(
-          `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`
-        );
-        
-        if (!forecastResponse.ok) {
-          throw new Error("Forecast data not available");
-        }
-        
-        const forecastData = await forecastResponse.json();
-        
-        // Process hourly forecast (next 24 hours, in 3-hour increments)
-        const hourlyForecast = forecastData.list.slice(0, 8).map((item: any) => {
-          const time = new Date(item.dt * 1000);
-          return {
-            time: time.getHours() + ":00",
-            icon: getWeatherIcon(item.weather[0].id, item.weather[0].icon.includes("d")),
-            temp: Math.round(item.main.temp)
-          };
-        });
-        
-        // Process daily forecast (next 5 days)
-        const dailyMap = new Map();
-        forecastData.list.forEach((item: any) => {
-          const date = new Date(item.dt * 1000);
-          const day = date.toLocaleDateString('en-US', { weekday: 'short' });
-          
-          if (!dailyMap.has(day)) {
-            dailyMap.set(day, {
-              day,
-              temps: [],
-              icons: [],
-              conditions: [],
-            });
-          }
-          
-          const dayData = dailyMap.get(day);
-          dayData.temps.push(item.main.temp);
-          dayData.icons.push(item.weather[0].id);
-          dayData.conditions.push(item.weather[0].main);
-        });
-        
-        const dailyForecast = Array.from(dailyMap.values()).slice(0, 5).map(day => {
-          const temps = day.temps;
-          return {
-            day: day.day,
-            icon: getWeatherIcon(getMostFrequent(day.icons), true),
-            high: Math.round(Math.max(...temps)),
-            low: Math.round(Math.min(...temps))
-          };
-        });
-        
-        // Set processed weather data
-        setWeatherData({
-          location: data.name,
-          temperature: Math.round(data.main.temp),
-          condition: data.weather[0].main,
-          icon: getWeatherIcon(data.weather[0].id, data.weather[0].icon.includes("d")),
-          high: Math.round(data.main.temp_max),
-          low: Math.round(data.main.temp_min),
-          hourlyForecast,
-          dailyForecast
-        });
-        
-        setIsLoading(false);
-      } catch (error) {
-        console.error("Error fetching weather data:", error);
-        setWeatherError("Weather data unavailable");
-        setIsLoading(false);
-      }
-    };
-    
-    // Helper function to get the most frequent item in an array
-    const getMostFrequent = (arr: number[]) => {
-      const hashmap = arr.reduce((acc, val) => {
-        acc[val] = (acc[val] || 0) + 1;
-        return acc;
-      }, {} as Record<number, number>);
-      
-      return parseInt(Object.keys(hashmap).reduce((a, b) => 
-        hashmap[parseInt(a)] > hashmap[parseInt(b)] ? a : b));
-    };
-    
-    // Helper function to convert weather code to emoji icon
-    const getWeatherIcon = (code: number, isDay: boolean): string => {
-      // Thunderstorm
-      if (code >= 200 && code < 300) {
-        return "⛈️";
-      }
-      // Drizzle & Rain
-      else if ((code >= 300 && code < 400) || (code >= 500 && code < 600)) {
-        return "🌧️";
-      }
-      // Snow
-      else if (code >= 600 && code < 700) {
-        return "❄️";
-      }
-      // Atmosphere (fog, mist, etc)
-      else if (code >= 700 && code < 800) {
-        return "🌫️";
-      }
-      // Clear
-      else if (code === 800) {
-        return isDay ? "☀️" : "🌙";
-      }
-      // Clouds
-      else if (code > 800) {
-        return isDay ? "⛅" : "☁️";
-      }
-      return "❓";
-    };
-    
-    // Get user location and fetch weather
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          fetchWeatherData(position.coords.latitude, position.coords.longitude);
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-          setWeatherError("Location access denied");
-          setIsLoading(false);
-          
-          // Fallback to a default location (New York)
-          fetchWeatherData(40.7128, -74.0060);
-        }
-      );
-    } else {
-      setWeatherError("Geolocation not supported");
-      setIsLoading(false);
-      
-      // Fallback to a default location
-      fetchWeatherData(40.7128, -74.0060);
-    }
-  }, []);
-
   // Add macOS Sequoia scrollbar styles
   useEffect(() => {
     // Add a style tag to the document head
@@ -732,6 +530,53 @@ export default function MacOSDesktop({
     }
     return null;
   };
+
+  // Remove weather data interface
+  // ... existing code ...
+
+  // Remove references to weather in the dock info
+  const getAppInfo = (appName: string) => {
+    const appInfo: { [key: string]: { name: string; icon: string; url?: string } } = {
+      "Finder": {
+        name: "Finder",
+        icon: "finder.png",
+      },
+      "Netscape": {
+        name: "Netscape Navigator",
+        icon: "netscape.png",
+      },
+      "Mail": {
+        name: "Mail",
+        icon: "mail.png",
+      },
+      "Photos": {
+        name: "Photos",
+        icon: "photos.png",
+      },
+      "Messages": {
+        name: "Messages",
+        icon: "messages.png",
+      },
+      "Maps": {
+        name: "Maps",
+        icon: "maps.png",
+      },
+      "Music": {
+        name: "Music",
+        icon: "music.png",
+      },
+      "CherStore": {
+        name: "CherStore",
+        icon: "cherstore.png",
+      },
+      "System Settings": {
+        name: "System Settings",
+        icon: "settings.png",
+      },
+    };
+    return appInfo[appName];
+  };
+  // ... existing code ...
 
   return (
     <div 
@@ -801,7 +646,7 @@ export default function MacOSDesktop({
               
               {/* Portfolio Widget */}
               <a 
-                href="https://alexarmas.dev" 
+                href="https://alexandruarmas.github.io/PORT3/" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="desktop-widget bg-gradient-to-br from-purple-700 to-indigo-900 p-4 rounded-xl border border-purple-500 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
@@ -815,7 +660,7 @@ export default function MacOSDesktop({
                     />
                   </div>
                   <div>
-                    <h3 className="text-white font-semibold">Portofolio</h3>
+                    <h3 className="text-white font-semibold">Portfolio</h3>
                     <p className="text-gray-300 text-xs">View my projects</p>
                   </div>
                 </div>
@@ -1226,98 +1071,6 @@ export default function MacOSDesktop({
         <div className="absolute top-6 left-4" style={{ pointerEvents: "auto" }}>
           {/* World Clocks widget removed */}
         </div>
-
-        {/* Weather Widget - Enhanced with internal interactivity */}
-        {!isFullscreen && (
-        <div 
-          className="absolute top-8 bg-gradient-to-br from-blue-600/80 to-blue-700/80 backdrop-blur-xl rounded-3xl p-4 text-white w-44 shadow-xl border border-white/10 transition-all duration-300 group weather-widget"
-          style={{ 
-            pointerEvents: "auto",
-            animation: "bounce-gentle 6s ease-in-out infinite",
-            right: "1rem",
-            left: "auto",
-            position: "absolute"
-          }}
-        >
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center h-24">
-              <div className="w-6 h-6 border-2 border-white rounded-full border-t-transparent animate-spin mb-2"></div>
-              <div className="text-sm">Loading weather...</div>
-            </div>
-          ) : weatherError ? (
-            <div className="flex flex-col items-center justify-center h-24">
-              <div className="text-3xl mb-2">⚠️</div>
-              <div className="text-sm text-center">{weatherError}</div>
-              <button 
-                className="mt-3 px-2 py-1 bg-white/20 hover:bg-white/30 rounded text-xs transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleWeatherWidgetClick(); // Use existing handler instead of direct fetch
-                }}
-              >
-                Try Again
-              </button>
-            </div>
-          ) : weatherData && (
-            <>
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-lg font-semibold mb-1 group-hover:text-blue-200 transition-colors cursor-pointer" onClick={handleWeatherWidgetClick}>{weatherData.location}</h2>
-                  <div className="text-4xl font-bold animate-pulse">{weatherData.temperature}°C</div>
-                  <div className="text-sm mt-2">{weatherData.condition}</div>
-                  <div className="text-sm mt-1">H:{weatherData.high}° L:{weatherData.low}°</div>
-                </div>
-                <div className="text-4xl animate-spin-slow cursor-pointer relative group" onClick={handleWeatherWidgetClick}>
-                  {weatherData.icon}
-                  <div className="absolute top-full right-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-blue-900/80 px-1.5 py-0.5 rounded whitespace-nowrap">
-                    Open Weather
-                  </div>
-                </div>
-              </div>
-
-              {/* Mini forecast previews */}
-              <div className="mt-3 pt-3 border-t border-white/20 grid grid-cols-4 gap-1">
-                {weatherData.hourlyForecast?.slice(0, 4).map((hour, index) => (
-                  <div key={index} className="flex flex-col items-center">
-                    <div className="text-[10px]">{hour.time}</div>
-                    <div className="text-xs">{hour.icon}</div>
-                    <div className="text-[10px]">{hour.temp}°</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Control buttons */}
-              <div className="mt-3 flex justify-between items-center">
-                <button 
-                  className="p-1.5 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleWeatherWidgetClick(); // Use existing handler instead of direct fetch
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                
-                <div className="text-xs opacity-70">Updated just now</div>
-                
-                <button 
-                  className="p-1.5 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleWeatherWidgetClick(); // Use existing handler instead of direct fetch
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-        )}
 
         {/* Calendar Widget - removed */}
         
@@ -1863,126 +1616,6 @@ export default function MacOSDesktop({
                           </span>
           </div>
         </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {activeWindow === "weather" && (
-                <div className="w-full h-full overflow-hidden">
-                  {/* Weather app toolbar */}
-                  <div className="h-10 bg-[#1e1e1e] flex items-center justify-center relative text-white/80 text-sm font-medium border-b border-[#333]">
-                    <div className="absolute left-4 flex items-center space-x-2">
-                      <button className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-[#333] text-white/70">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                      <button className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-[#333] text-white/70">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                    </div>
-                    Weather
-                    <div className="absolute right-4 flex items-center space-x-2">
-                      <button className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-[#333] text-white/70">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                      <button className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-[#333] text-white/70">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Weather app content */}
-                  <div className="w-full h-[calc(100%-2.5rem)] bg-[#1a3a8f] text-white overflow-y-auto">
-                    {isLoading ? (
-                      <div className="flex flex-col items-center justify-center h-full">
-                        <div className="w-10 h-10 border-3 border-white rounded-full border-t-transparent animate-spin mb-4"></div>
-                        <div className="text-xl">Loading weather data...</div>
-                      </div>
-                    ) : weatherError ? (
-                      <div className="flex flex-col items-center justify-center h-full">
-                        <div className="text-5xl mb-4">⚠️</div>
-                        <div className="text-xl text-center">{weatherError}</div>
-                        <div className="mt-4 text-sm text-center max-w-md">
-                          Please enable location services in your browser to see weather information for your current location.
-                        </div>
-                      </div>
-                    ) : weatherData && (
-                      <div className="p-8 pt-10">
-                        {/* City name */}
-                        <h1 className="text-3xl font-semibold mb-6">{weatherData.location}</h1>
-                        
-                        {/* Temperature and icon in simplified format */}
-                        <div className="flex items-center">
-                          <div className="text-[140px] font-light relative leading-none">
-                            {weatherData.temperature < 0 ? "-" : ""}
-                            {Math.abs(weatherData.temperature)}°
-                          </div>
-                          <div className="text-6xl ml-2 mt-4">{weatherData.icon}</div>
-                        </div>
-                        
-                        {/* Condition and high/low */}
-                        <div className="text-2xl mt-2">{weatherData.condition}</div>
-                        <div className="text-xl mt-2">
-                          H: {weatherData.high > 0 ? "" : "-"}{Math.abs(weatherData.high)}°C 
-                          L: {weatherData.low > 0 ? "" : "-"}{Math.abs(weatherData.low)}°C
-                        </div>
-                        
-                        {/* Hourly forecast in a more subtle format */}
-                        <div className="mt-12">
-                          <h2 className="text-xl font-medium mb-4">Hourly Forecast</h2>
-                          <div className="bg-white/10 backdrop-blur-md rounded-xl p-4">
-                            <div className="grid grid-cols-8 gap-2">
-                              {weatherData.hourlyForecast.map((hour, i) => (
-                                <div key={i} className="flex flex-col items-center p-2">
-                                  <div className="font-medium">{hour.time}</div>
-                                  <div className="my-2 text-xl">{hour.icon}</div>
-                                  <div className="font-medium">
-                                    {hour.temp > 0 ? "" : "-"}{Math.abs(hour.temp)}°
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* 5-Day forecast */}
-                        <div className="mt-8 pb-8">
-                          <h2 className="text-xl font-medium mb-4">5-Day Forecast</h2>
-                          <div className="bg-white/10 backdrop-blur-md rounded-xl p-4">
-                            {weatherData.dailyForecast.map((day, i) => (
-                              <div key={i} className={`flex items-center py-3 ${i !== weatherData.dailyForecast.length - 1 ? 'border-b border-white/10' : ''}`}>
-                                <div className="w-24 font-medium">{day.day}</div>
-                                <div className="text-2xl mx-4">{day.icon}</div>
-                                <div className="flex-1 flex items-center">
-                                  <div className="font-medium w-10">
-                                    {day.low > 0 ? "" : "-"}{Math.abs(day.low)}°
-                                  </div>
-                                  <div className="flex-1 mx-4 h-1.5 bg-white/20 rounded-full overflow-hidden">
-                                    <div 
-                                      className="h-full bg-white rounded-full"
-                                      style={{ 
-                                        width: `${Math.abs((day.high - day.low) / 20) * 100}%`,
-                                        marginLeft: `${Math.min(100, Math.max(0, ((day.low + 20) / 40) * 100))}%` 
-                                      }}
-                                    ></div>
-                                  </div>
-                                  <div className="font-medium w-10">
-                                    {day.high > 0 ? "" : "-"}{Math.abs(day.high)}°
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
                     )}
                   </div>
                 </div>
@@ -3222,74 +2855,6 @@ export default function MacOSDesktop({
                 </div>
               )}
 
-              {activeWindow === "weather" && (
-                <div className="w-full h-full bg-gradient-to-br from-blue-800 to-blue-900 text-white p-6">
-                  {isLoading ? (
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <div className="w-10 h-10 border-3 border-white rounded-full border-t-transparent animate-spin mb-4"></div>
-                      <div className="text-xl">Loading weather data...</div>
-                    </div>
-                  ) : weatherError ? (
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <div className="text-5xl mb-4">⚠️</div>
-                      <div className="text-xl text-center">{weatherError}</div>
-                      <div className="mt-4 text-sm text-center max-w-md">
-                        Please enable location services in your browser to see weather information for your current location.
-                      </div>
-                    </div>
-                  ) : weatherData && (
-                    <>
-                      <div className="flex justify-between items-start mb-8">
-                        <div>
-                          <h2 className="text-2xl font-semibold mb-1">{weatherData.location}</h2>
-                          <div className="text-5xl font-bold">{weatherData.temperature}°C</div>
-                          <div className="text-sm mt-2">{weatherData.condition}</div>
-                          <div className="text-sm mt-1">H:{weatherData.high}°C L:{weatherData.low}°C</div>
-                        </div>
-                        <div className="text-5xl">{weatherData.icon}</div>
-                      </div>
-                      
-                      <div className="bg-black/20 backdrop-blur-md rounded-2xl p-4 mb-6">
-                        <h3 className="text-sm font-medium mb-2">Hourly Forecast</h3>
-                        <div className="flex space-x-4 overflow-x-auto pb-2">
-                          {weatherData.hourlyForecast.map((hour: {time: string; icon: string; temp: number}, i: number) => (
-                            <div key={i} className="flex flex-col items-center">
-                              <div className="text-sm">{hour.time}</div>
-                              <div className="my-2 text-xl">{hour.icon}</div>
-                              <div className="text-sm">{hour.temp}°C</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      <div className="bg-black/20 backdrop-blur-md rounded-2xl p-4">
-                        <h3 className="text-sm font-medium mb-2">5-Day Forecast</h3>
-                        <div className="space-y-3">
-                          {weatherData.dailyForecast.map((day: {day: string; icon: string; high: number; low: number}, i: number) => (
-                            <div key={i} className="flex items-center justify-between">
-                              <div className="w-16 text-sm">{day.day}</div>
-                              <div className="text-xl">{day.icon}</div>
-                              <div className="flex items-center space-x-2">
-                                <div className="w-24 bg-white/20 rounded-full h-1">
-                                  <div 
-                                    className="bg-white h-1 rounded-full" 
-                                    style={{ width: `${Math.min(100, Math.max(0, ((day.high - day.low) / 30) * 100))}%` }}
-                                  ></div>
-                                </div>
-                                <div className="text-sm w-16 flex justify-between">
-                                  <span>{day.low}°</span>
-                                  <span>{day.high}°</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
               {activeWindow === "maps" && (
                 <div className="h-full flex flex-col">
                   <div className="p-3 flex items-center justify-between bg-[#252525] border-b border-[#333]">
@@ -3667,7 +3232,7 @@ export default function MacOSDesktop({
           {/* Trash icon */}
           <div 
             className="relative group cursor-pointer transition-transform hover:scale-125 hover:-translate-y-2 duration-200"
-            onClick={handleTrashClick}
+            onClick={() => openWindow("trash")}
           >
             <div className="w-12 h-12 rounded-xl overflow-hidden shadow-lg flex items-center justify-center">
               <div className="w-full h-full bg-gradient-to-b from-gray-200 to-gray-300 flex items-center justify-center">

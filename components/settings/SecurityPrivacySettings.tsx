@@ -124,14 +124,6 @@ export default function SecurityPrivacySettings() {
                   </div>
                   
                   <div className="flex items-center justify-between py-1">
-                    <span className="text-sm text-[#E0E0E0]">Weather</span>
-                    <select className="bg-[#303030] border-none rounded-md px-3 py-1 text-xs text-[#E0E0E0]">
-                      <option>While Using</option>
-                      <option>Never</option>
-                    </select>
-                  </div>
-                  
-                  <div className="flex items-center justify-between py-1">
                     <span className="text-sm text-[#E0E0E0]">System Services</span>
                     <select className="bg-[#303030] border-none rounded-md px-3 py-1 text-xs text-[#E0E0E0]">
                       <option>Always</option>
