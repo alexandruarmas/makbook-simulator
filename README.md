@@ -60,3 +60,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 ## 🤝 Contributing
 
 Contributions, issues, and feature requests are welcome! Feel free to check the issues page. 
+
+## See It In Action
+
+👉 Experience the live MacBook simulator: [https://alexandruarmas.github.io/makbook-simulator](https://alexandruarmas.github.io/makbook-simulator)
